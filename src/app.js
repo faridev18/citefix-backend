@@ -2,6 +2,7 @@ const express = require('express')
 const cors = require('cors')
 const morgan = require('morgan')
 const dotenv = require('dotenv')
+const path = require('path');
 
 dotenv.config()
 
@@ -17,11 +18,15 @@ const interventionsRoutes = require('./api/routes/interventions.routes')
 const notificationsRoutes = require('./api/routes/notifications.routes')
 const adminRoutes = require('./api/routes/admin.routes')
 
+
+app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
+
 app.use('/api/auth', authRoutes)
 app.use('/api/reports', reportsRoutes)
 app.use('/api/interventions', interventionsRoutes)
 app.use('/api/notifications', notificationsRoutes)
 app.use('/api/admin', adminRoutes)
+app.use('/api/users', require('./api/routes/users.routes'))
 
 // Error handling middleware
 const { errorHandler } = require('./api/middlewares/error.middleware')

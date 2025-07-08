@@ -5,28 +5,99 @@ const Intervention = require('../../models/intervention.model')
 // GET /api/admin/stats - Statistiques globales
 exports.getStats = async (req, res) => {
   try {
+    // Utilisateurs
     const usersCount = await User.countDocuments()
-    const reportsCount = await Report.countDocuments()
-    const interventionsCount = await Intervention.countDocuments()
     const activeUsers = await User.countDocuments({ status: 'active' })
+    const oneMonthAgo = new Date()
+    oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1)
+    const usersThisMonth = await User.countDocuments({ createdAt: { $gte: oneMonthAgo } })
 
-    // Statistiques avancées : par catégorie, par statut...
+    // Signalements
+    const reportsCount = await Report.countDocuments()
+    const reportsThisMonth = await Report.countDocuments({ "timestamps.createdAt": { $gte: oneMonthAgo } })
+    const pendingReports = await Report.countDocuments({ status: "reported" })
+    const resolvedReports = await Report.countDocuments({ status: "resolved" })
+
+    // Interventions
+    const interventionsCount = await Intervention.countDocuments()
+    const interventionsThisMonth = await Intervention.countDocuments({ createdAt: { $gte: oneMonthAgo } })
+
+    // Catégorie/statut
     const byCategory = await Report.aggregate([
-      { $group: { _id: '$category', total: { $sum: 1 } } }
+      { $group: { _id: '$category', count: { $sum: 1 } } },
+      { $sort: { count: -1 } }
     ])
     const byStatus = await Report.aggregate([
-      { $group: { _id: '$status', total: { $sum: 1 } } }
+      { $group: { _id: '$status', count: { $sum: 1 } } }
     ])
 
+    // Techniciens depuis User (rôle)
+    const topTechs = await User.find({ role: "technician" })
+      .select("name avatar status")
+      .limit(5)
+
+    // Activité récente
+    const recentActivity = await Report.find({})
+      .sort({ "timestamps.createdAt": -1 })
+      .limit(6)
+      .select("title category status timestamps.createdAt priority")
+      .lean()
+
+    // Perf système simulée
+    const performance = {
+      responseTime: "1.2s",
+      responseScore: 85,
+      availability: 99.8,
+      userSatisfaction: 4.2,
+      userSatisfactionScore: 84
+    }
+
+    const alerts = [
+      { id: 1, type: "system", message: "Maintenance prévue ce soir", severity: "info" },
+      { id: 2, type: "performance", message: "Temps de réponse élevé secteur Akpakpa", severity: "warning" },
+      { id: 3, type: "security", message: "Tentative de connexion suspecte détectée", severity: "error" },
+    ]
+
+    const userGrowth = usersCount > 0 ? Math.round((usersThisMonth / usersCount) * 100) : 0
+    const reportGrowth = reportsCount > 0 ? Math.round((reportsThisMonth / reportsCount) * 100) : 0
+
     res.json({
-      usersCount,
-      reportsCount,
-      interventionsCount,
-      activeUsers,
-      byCategory,
-      byStatus
+      stats: {
+        totalUsers: usersCount,
+        activeUsers,
+        totalReports: reportsCount,
+        pendingReports,
+        resolvedReports,
+        interventions: interventionsCount,
+        userGrowth,
+        reportGrowth,
+        interventionsThisMonth,
+        reportsThisMonth
+      },
+      topCategories: byCategory.map(c => ({
+        category: c._id,
+        count: c.count,
+        percentage: reportsCount > 0 ? Math.round((c.count / reportsCount) * 100) : 0
+      })),
+      byStatus,
+      technicians: topTechs.map(t => ({
+        id: t._id,
+        name: t.name,
+        avatar: t.avatar,
+        status: t.status || "N/A",
+      })),
+      recentActivity: recentActivity.map(r => ({
+        id: r._id,
+        type: r.priority === "urgent" ? "report_urgent" : "report_resolved",
+        message: `Signalement ${r.title} (${r.category}) - statut ${r.status}`,
+        timestamp: r.timestamps.createdAt,
+        priority: r.priority || "low"
+      })),
+      performance,
+      alerts
     })
   } catch (err) {
+    console.error("Erreur getStats admin:", err)
     res.status(500).json({ error: 'Erreur serveur' })
   }
 }

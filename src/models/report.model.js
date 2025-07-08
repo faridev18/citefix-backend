@@ -22,11 +22,17 @@ const ReportSchema = new mongoose.Schema({
   status: { type: String, enum: ['reported', 'validated', 'assigned', 'in_progress', 'completed', 'resolved', 'rejected'], default: 'reported' },
 
   location: {
-    address: String,
-    coordinates: {
-      type: { type: String, default: 'Point' },
-      coordinates: { type: [Number], index: '2dsphere' }
+    type: {
+      type: String,
+      default: "Point",
+      enum: ["Point"]
     },
+    coordinates: {
+      type: [Number],
+      required: true,
+      index: '2dsphere'
+    },
+    address: String,
     zone: String,
     landmark: String
   },
